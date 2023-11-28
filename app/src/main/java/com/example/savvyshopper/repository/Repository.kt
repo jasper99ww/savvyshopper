@@ -18,8 +18,8 @@ class Repository (
         listDao.insertShoppingList(shoppingList)
     }
 
-    suspend fun insertItem(item: Item) {
-        itemDao.insert(item)
+    suspend fun insertItem(item: Item): Long {
+        return itemDao.insertAndGetId(item)
     }
 
     suspend fun deleteItem(item: Item) {
@@ -28,5 +28,9 @@ class Repository (
 
     suspend fun updateItem(item: Item) {
         itemDao.update(item)
+    }
+
+    suspend fun getLastInsertId(): Long {
+        return itemDao.getLastInsertId()
     }
 }

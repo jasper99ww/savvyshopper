@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 class HomeViewModel(
     private val repository: Repository = Graph.repository
 ): ViewModel() {
+
     var state by mutableStateOf(HomeState())
         private set
 

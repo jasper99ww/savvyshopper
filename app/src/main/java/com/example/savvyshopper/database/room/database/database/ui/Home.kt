@@ -2,7 +2,12 @@ package com.example.savvyshopper.database.room.database.database.ui
 
 import DataStoreManager
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Context.RECEIVER_NOT_EXPORTED
 import android.content.Intent
+import android.content.IntentFilter
+import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
@@ -25,6 +31,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.IconButton
+import androidx.compose.material.SnackbarHost
+import androidx.compose.material.SnackbarHostState
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -34,12 +42,14 @@ import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -49,18 +59,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.savvyshopper.Category
 import com.example.savvyshopper.OptionsActivity
+import com.example.savvyshopper.ProductAdditionReceiver
 import com.example.savvyshopper.Utils
 import com.example.savvyshopper.database.room.database.database.Item
 import com.example.savvyshopper.database.room.database.database.ItemsWithList
 import com.example.savvyshopper.database.room.database.database.ui.itemdetail.DetailActivity
 import com.example.savvyshopper.database.room.database.database.ui.options.OptionsViewModel
 import com.example.savvyshopper.ui.theme.Shapes
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,11 +89,24 @@ fun HomeScreen(
     val homeViewModel = viewModel(modelClass = HomeViewModel::class.java)
     val homeState = homeViewModel.state
 
+    DisposableEffect(Unit) {
+        val receiver = ProductAdditionReceiver()
+        val filter = IntentFilter("com.example.savvyshopper.PRODUCT_ADDED")
+        context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
     val fontSize by dataStoreManager.getFontSize().collectAsState(initial = 14f)
     val fontColorHex by dataStoreManager.getFontColor().collectAsState(initial = "#000000")
     val fontColor = Color(android.graphics.Color.parseColor(fontColorHex))
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -105,49 +133,67 @@ fun HomeScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-//                onNavigate.invoke(-1)
                 val detailIntent = Intent(context, DetailActivity::class.java)
                 context.startActivity(detailIntent)
             }) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = null)
             }
         },
+        floatingActionButtonPosition = FabPosition.End
     ) {
-        LazyColumn(modifier = Modifier
-            .padding(top = it.calculateTopPadding(), bottom = 80.dp)
-        ){
-            item {
-                LazyRow {
-                    items(Utils.category){ category: Category ->
-                        CategoryItem(
-                            iconRes = category.resId,
-                            title = category.title,
-                            selected = category == homeState.category,
-                            onItemClick = {
-                                if (category == homeState.category) {
-                                    homeViewModel.onCategoryChange(null) // Odznaczanie kategorii
-                                } else {
-                                    homeViewModel.onCategoryChange(category) // Zaznaczanie nowej kategorii
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 16.dp)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .padding(top = it.calculateTopPadding())
+                    .padding(bottom = 80.dp)
+            ) {
+                item {
+                    LazyRow {
+                        items(Utils.category) { category: Category ->
+                            CategoryItem(
+                                iconRes = category.resId,
+                                title = category.title,
+                                selected = category == homeState.category,
+                                onItemClick = {
+                                    if (category == homeState.category) {
+                                        homeViewModel.onCategoryChange(null) // Odznaczanie kategorii
+                                    } else {
+                                        homeViewModel.onCategoryChange(category) // Zaznaczanie nowej kategorii
+                                    }
                                 }
-                            }
-                        )
-                        Spacer(modifier = Modifier.size(16.dp))
+                            )
+                            Spacer(modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
+                items(homeState.items) { item ->
+                    ShoppingItems(
+                        item = item,
+                        isChecked = item.item.isChecked,
+                        onCheckedChange = homeViewModel::onItemCheckedChange,
+                        onItemClick = {
+                            onNavigate.invoke(item.item.id)
+                        },
+                        fontSize = fontSize.sp,
+                        fontColor = fontColor
+                    )
+                }
             }
-            items(homeState.items) { item ->
-                ShoppingItems(
-                    item = item,
-                    isChecked = item.item.isChecked,
-                    onCheckedChange = homeViewModel::onItemCheckedChange,
-                    onItemClick = {
-                        onNavigate.invoke(item.item.id)
-                    },
-                    fontSize = fontSize.sp,
-                    fontColor = fontColor
-                )
 
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+            ) {
+                Text(
+                    text = "Number of products: ${homeState.items.size}",
+                    style = MaterialTheme.typography.headlineSmall
+                )
             }
+
+
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.example.savvyshopper.database.room.database.database.ui.itemdetail
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,8 +19,9 @@ import kotlinx.coroutines.launch
 
 class DetailViewModel
 constructor(
+        private val context: Context,
         private val itemId:Int,
-        private val repository: Repository = Graph.repository
+        private val repository: Repository = Graph.repository,
 ):ViewModel() {
 
     var state by mutableStateOf(DetailState())
@@ -84,18 +87,30 @@ constructor(
     }
 
     fun addShoppingItem(){
+
         viewModelScope.launch {
-            repository.insertItem(
-                Item(
-                    itemName = state.item,
-                    listIdForeignKey = state.category.id,
-                    price = state.price,
-                    quantity = state.quantity,
-                    isChecked = false
-                )
+            val newItem = Item(
+                itemName = state.item,
+                listIdForeignKey = state.category.id,
+                price = state.price,
+                quantity = state.quantity,
+                isChecked = false
             )
+
+            val newProductId = repository.insertItem(newItem)
+            sendProductAddedBroadcast(context, newProductId.toInt(), newItem.itemName)
         }
     }
+
+        private fun sendProductAddedBroadcast(context: Context, productId: Int, productName: String) {
+            val intent = Intent("com.example.savvyshopper.PRODUCT_ADDED").apply {
+                putExtra("productId", productId)
+                putExtra("productName", productName)
+                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+            }
+//            context.sendBroadcast(intent, )
+            context.sendBroadcast(intent, "com.example.savvyshopper.PRODUCT_ADDITION_PERMISSION")
+        }
 
     fun updateShoppingItem(id:Int){
         viewModelScope.launch {
@@ -115,9 +130,12 @@ constructor(
 }
 
 @Suppress("UNCHECKED_CAST")
-class DetailViewModelFactory(private val id: Int):ViewModelProvider.Factory {
+class DetailViewModelFactory(
+    private val context: Context,
+    private val itemId: Int
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return DetailViewModel(itemId = id) as T
+        return DetailViewModel(context, itemId) as T
     }
 }
 

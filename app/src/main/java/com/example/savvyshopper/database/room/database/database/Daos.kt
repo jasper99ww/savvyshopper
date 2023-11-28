@@ -6,6 +6,7 @@ import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -25,6 +26,15 @@ interface ItemDao {
 
     @Delete
     suspend fun delete(item: Item)
+
+    @Transaction
+    suspend fun insertAndGetId(item: Item): Long {
+        insert(item)
+        return getLastInsertId()
+    }
+
+    @Query("SELECT last_insert_rowid()")
+    suspend fun getLastInsertId(): Long
 }
 
 @Dao
